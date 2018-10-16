@@ -78,6 +78,7 @@ class Nrf802154Sniffer(object):
         self.logger = logging.getLogger(__name__)
         self.dev = None
         self.channel = None
+        self.threads = []
 
     def stop_sig_handler(self, *args, **kwargs):
         """
@@ -92,6 +93,11 @@ class Nrf802154Sniffer(object):
             self.serial_queue.put(b'')
             self.serial_queue.put(b'sleep')
             self.running.clear()
+            
+            for thread in self.threads:
+                thread.join()
+
+            self.threads = []
         else:
             self.logger.warning("Asked to stop {} while it was already stopped".format(self))
 
@@ -365,16 +371,14 @@ class Nrf802154Sniffer(object):
 
         # TODO: Add toolbar with channel selector (channel per interface?)
         if control_in:
-            ctr_in_thread = threading.Thread(target=self.control_reader, args=(control_in,))
-            ctr_in_thread.start()
+            self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
 
-        serial_thread = threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_thread")
-        fifo_thread = threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_thread")
-        hup_thread = threading.Thread(target=self.fifo_detector, args=(fifo,), name="hup_thread")
+        self.threads.append(threading.Thread(target=self.fifo_detector, args=(fifo,), name="hup_thread"))
+        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_thread"))
+        self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_thread"))
 
-        hup_thread.start()
-        serial_thread.start()
-        fifo_thread.start()
+        for thread in self.threads:
+            thread.start()
 
         while is_standalone and self.running.is_set():
             time.sleep(1)
