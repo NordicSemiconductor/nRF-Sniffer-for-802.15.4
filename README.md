@@ -18,13 +18,13 @@ To start using the sniffer, you must flash the firmware, install the script, and
 1. Connect the nRF52840-DK to the PC with an USB cable by connecting it to the J2 USB port.
 2. Flash the firmware with the following command:
 ```
-nrfjprog -f nrf52 --program nrf802154_sniffer.hex --chiperase -r
+nrfjprog -f nrf52 --program nrf802154_sniffer/nrf802154_sniffer.hex --chiperase -r
 ```
 
 ### Install extcap script
 Copy the provided script to the appropriate directory:
 ```
-sudo cp nrf802154_sniffer.py /usr/lib/x86_64-linux-gnu/wireshark/extcap/
+sudo cp nrf802154_sniffer/nrf802154_sniffer.py /usr/lib/x86_64-linux-gnu/wireshark/extcap/
 ```
 
 ### Start sniffing
