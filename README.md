@@ -41,3 +41,24 @@ Ensure that Python directory is included in your `PATH` system environment varia
 3. Select the 802.15.4 channel.
 4. Select the serial port associated with the board that you flashed the firmware on.
 5. Click 'Start'.
+
+## Custom Wireshark dissector
+Custom wireshark dissector can be used to obtain additional informations from sniffer. Channel, RSSI and LQI can be displayed for every packet.
+
+### Install Lua dissector
+Copy the provided script to the appropriate directory (it can be found in `About Wireshark -> Folders -> Personal Lua Plugins`):
+```
+sudo cp nrf802154_sniffer/nrf802154_sniffer.lua /usr/lib/x86_64-linux-gnu/wireshark/plugins/
+```
+### Modify extcap script
+Modify `nrf802154_sniffer.py`:
+
+`sudo nano /usr/lib/x86_64-linux-gnu/wireshark/extcap/nrf802154_sniffer.py`
+- Uncomment line 64:
+    ```python
+    DLT='user'
+    ```
+- Comment line 65:
+    ```python
+    #DLT='802.15.4'
+    ```
