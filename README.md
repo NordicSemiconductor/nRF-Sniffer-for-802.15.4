@@ -2,9 +2,12 @@
 
 This repository contains firmware and Wireshark extcap script that can be used with nRF52840 chip as an 802.15.4 sniffer.
 
-__Note:__ this project is experimental. There is __no Windows support__ in the current version.
+__Note:__ this project is experimental.
 
-The software provided has been tested with the nRF52840-DK board and Wireshark 2.4.5 from the official Ubuntu 18.04 package.
+The software provided has been tested with the nRF52840-DK board and the following operating systems:
+* Ubuntu 18.04 (Wireshark 2.4.5 from the official package, Wireshark 2.6.4)
+* Windows 10 (Wireshark 2.6.3)
+* macOS Mojave (Wireshark 2.6.4)
 
 ## Dependencies
 * Wireshark (Ubuntu package `wireshark`)
@@ -21,18 +24,16 @@ To start using the sniffer, you must flash the firmware, install the script, and
 nrfjprog -f nrf52 --program nrf802154_sniffer/nrf802154_sniffer.hex --chiperase -r
 ```
 
-### Install extcap script on Linux
-Copy the provided script to the appropriate directory:
-```
-sudo cp nrf802154_sniffer/nrf802154_sniffer.py /usr/lib/x86_64-linux-gnu/wireshark/extcap/
-```
+### Install extcap script
 
-### Install extcap script on Windows
-Copy both .bat and .py scripts from nrf802154_sniffer\ to the appropriate directory:
+To find the correct installation path of the extcap utility on any system please see:
 ```
-<wireshark-install-dir>\extcap\
+"Help" -> "About Wireshark" -> "Folders" -> "Extcap path"
 ```
-Ensure that Python directory is included your PATH system environment variable.
+Copy the provided `nrf802154_sniffer.py` script to the extcap directory.
+
+__Note to Windows users:__ `nrf802154_sniffer.bat` has to be copied to the same directory as well.
+Ensure that Python directory is included in your `PATH` system environment variable.
 
 ### Start sniffing
 1. Run Wireshark.
