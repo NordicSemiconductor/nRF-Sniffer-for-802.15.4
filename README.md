@@ -21,11 +21,18 @@ To start using the sniffer, you must flash the firmware, install the script, and
 nrfjprog -f nrf52 --program nrf802154_sniffer/nrf802154_sniffer.hex --chiperase -r
 ```
 
-### Install extcap script
+### Install extcap script on Linux
 Copy the provided script to the appropriate directory:
 ```
 sudo cp nrf802154_sniffer/nrf802154_sniffer.py /usr/lib/x86_64-linux-gnu/wireshark/extcap/
 ```
+
+### Install extcap script on Windows
+Copy both .bat and .py scripts from nrf802154_sniffer\ to the appropriate directory:
+```
+<wireshark-install-dir>\extcap\
+```
+Ensure that Python directory is included your PATH system environment variable.
 
 ### Start sniffing
 1. Run Wireshark.
