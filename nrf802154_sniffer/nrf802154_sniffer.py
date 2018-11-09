@@ -94,11 +94,20 @@ class Nrf802154Sniffer(object):
             self.serial_queue.put(b'')
             self.serial_queue.put(b'sleep')
             self.running.clear()
+
+            alive_threads = []
             
             for thread in self.threads:
-                thread.join()
+                try:
+                    thread.join(timeout=10)
+                    if thread.is_alive() is True:
+                        self.logger.error("Failed to stop a thread")
+                        alive_threads.append(thread)
+                except RuntimeError:
+                    # TODO: This may be called from one of threads from thread list - architecture problem
+                    pass
 
-            self.threads = []
+            self.threads = alive_threads
         else:
             self.logger.warning("Asked to stop {} while it was already stopped".format(self))
 
@@ -373,6 +382,10 @@ class Nrf802154Sniffer(object):
         Main method responsible for starting all other threads. In case of standalone execution this method will block
         until SIGTERM/SIGINT and/or stop_sig_handler disables the loop via self.running event.
         """
+
+        if len(self.threads):
+            raise RuntimeError("Old threads were not joined properly")
+
         packet_queue = Queue.Queue()
         self.channel = channel
         self.dev = dev
