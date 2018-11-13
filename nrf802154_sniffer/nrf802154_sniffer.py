@@ -45,7 +45,6 @@ if __name__ == '__main__':
 
 
 import re
-import select
 import signal
 import struct
 import threading
@@ -232,8 +231,7 @@ class Nrf802154Sniffer(object):
         except:
             return None, None, None
 
-    @staticmethod
-    def control_reader(fifo):
+    def control_reader(self, fifo):
         """
         Thread responsible for reading wireshark commands (read from fifo).
         Related to not-yet-implemented wireshark toolbar features.
@@ -242,6 +240,7 @@ class Nrf802154Sniffer(object):
             arg = 0
             while arg != None:
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
+            self.stop_sig_handler()
 
     def control_writer(self, fifo, queue):
         """
@@ -364,19 +363,6 @@ class Nrf802154Sniffer(object):
                 except Queue.Empty:
                     pass
 
-    def fifo_detector(self, fifo):
-        """
-        Thread responsible for closing the sniffer in case of closed file/fifo.
-        """
-        with open(fifo, 'wb', 0) as fd:
-            p = select.poll()
-            p.register(fd, select.POLLHUP | select.POLLERR)
-
-            while self.running.is_set():
-                for descriptor, mask in p.poll(1000):
-                    if descriptor == fd.fileno() and mask & (select.POLLHUP | select.POLLERR):
-                        self.stop_sig_handler()
-
     def extcap_capture(self, fifo, dev, channel, control_in=None, control_out=None):
         """
         Main method responsible for starting all other threads. In case of standalone execution this method will block
@@ -395,7 +381,6 @@ class Nrf802154Sniffer(object):
         if control_in:
             self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
 
-        self.threads.append(threading.Thread(target=self.fifo_detector, args=(fifo,), name="hup_thread"))
         self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_thread"))
         self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_thread"))
 
