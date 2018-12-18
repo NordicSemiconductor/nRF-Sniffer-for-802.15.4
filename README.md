@@ -19,7 +19,7 @@ To start using the sniffer, you must flash the firmware, install the script, and
 
 ### Flash firmware
 
-#### nRF52840-DK
+#### nRF52840-DK (PCA10056)
 1. Connect the nRF52840-DK to the PC with an USB cable by connecting it to the J2 USB port.
 2. Flash the firmware with the following command:
 ```
@@ -30,7 +30,7 @@ nrfjprog -f nrf52 --program nrf802154_sniffer/nrf802154_sniffer.hex --chiperase 
 
 __Note:__ Sniffer firmware can no longer transport captured packets over J2 USB port. Capture can be carried out using only the J3 nRF USB port.
 
-#### nRF52840-Dongle
+#### nRF52840-Dongle (PCA10059)
 
 1. Download and install [nRF Connect for Desktop](https://www.nordicsemi.com/Software-and-Tools/Development-Tools/nRF-Connect-for-desktop).
 2. Click `Add/remove apps` and install `Programmer` application.
@@ -59,22 +59,41 @@ Ensure that Python directory is included in your `PATH` system environment varia
 4. Select the serial port associated with the board that you flashed the firmware on.
 5. Click 'Start'.
 
-## Wireshark configuration
+## Wireshark configuration for Thread
 
-### Capturing Thread packets
+### Decryption key
 
-In order to capture packets exchanged on the Thread network it is necessary to configure the Wireshark to use correct decryption keys.
+In order to decode packets exchanged on the Thread network it is necessary to configure the Wireshark to use correct decryption keys.
 To set decryption keys go to `Edit -> Preferences... -> Protocols -> IEEE 802.15.4 -> Decryption Keys`. The default decryption key used by nRF5 SDK for Thread and Zigbee examples is `00112233445566778899aabbccddeeff`. Set decryption key index to `0` and `Key hash` to `Thread hash` value.
 
-### Custom Wireshark dissector
+### CoAP port configuration
+
+Thread uses CoAP protocol on port 61631 for internal purposes. To correctly decode packets sent over that port you can either:
+* apply the setting globally by editing CoAP protocol settings in `Preferences` and changing the `CoAP UDP port` value to `61631`.
+* apply it on per-capture basis by adding an entry to `Analyze -> Decode as...`. Set `Field` column to `UDP port`, `Value` to `61631` and decode using CoAP dissector (`Current` column).
+
+### 6loWPAN contexts
+
+Go to 6loWPAN settings in `Preferences` window and add correct values. Contexts may vary depending on the Thread Network Data. Below values are used by Thread examples in nRF5 SDK.
+* Context 0: `fdde:ad00:beef:0::/64`
+* Context 1: `fd11:22::/64`
+
+### Disable unwanted protocols (optional)
+
+If Wireshark uses incorrect dissectors to decode a message you have an option to disable unwanted protocols. Go to `Analyze -> Enabled protocols` and uncheck unwanted protocols. Suggestions below.
+* LwMesh
+* ZigBee
+* ZigBee Green Power
+
+## Custom Wireshark dissector
 Custom wireshark dissector can be used to obtain additional informations from sniffer. Channel, RSSI and LQI can be displayed for every packet.
 
-#### Install Lua dissector
+### Install Lua dissector
 Copy the provided script to the appropriate directory (it can be found in `About Wireshark -> Folders -> Personal Lua Plugins`):
 ```
 sudo cp nrf802154_sniffer/nrf802154_sniffer.lua /usr/lib/x86_64-linux-gnu/wireshark/plugins/
 ```
-#### Modify extcap script
+### Modify extcap script
 Modify `nrf802154_sniffer.py`:
 
 `sudo nano /usr/lib/x86_64-linux-gnu/wireshark/extcap/nrf802154_sniffer.py`
