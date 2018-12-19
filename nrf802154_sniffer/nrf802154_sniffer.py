@@ -287,7 +287,7 @@ class Nrf802154Sniffer(object):
         # Wireshark needs this sleep for reset purposes
         time.sleep(2)
         try:
-            with Serial(dev, 115200, timeout=1) as ser:
+            with Serial(dev, timeout=1) as ser:
                 ser.reset_input_buffer()
                 ser.reset_output_buffer()
 
