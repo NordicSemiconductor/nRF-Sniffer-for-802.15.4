@@ -40,9 +40,8 @@ if sys.version[0] == '2':
 else:
     import queue as Queue
 
-if __name__ == '__main__':
+if is_standalone:
     sys.path.insert(0, os.getcwd())
-
 
 import re
 import signal
@@ -353,9 +352,6 @@ class Nrf802154Sniffer(object):
                 try:
                     packet = queue.get(block=True, timeout=1)
                     try:
-                        if is_standalone:
-                            sys.stdout.write('.')
-                            sys.stdout.flush()
                         fh.write(packet)
                         fh.flush()
                     except IOError:
