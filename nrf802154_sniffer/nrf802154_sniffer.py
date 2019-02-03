@@ -63,13 +63,14 @@ class Nrf802154Sniffer(object):
     DLT='802.15.4'
     DLT_NO = 147 if DLT == 'user' else 230
 
-    # helper for wireshark arg parsing
+    # Helpers for Wireshark argument parsing.
     CTRL_ARG_CHANNEL = 0
 
-    # pattern for packets being printed over serial
+    # Pattern for packets being printed over serial.
     RCV_REGEX = 'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
 
     def __init__(self):
+        self.serial = None
         self.serial_queue = Queue.Queue()
         self.running = threading.Event()
         self.setup_done = threading.Event()
@@ -84,7 +85,7 @@ class Nrf802154Sniffer(object):
         Function responsible for stopping the sniffer firmware and closing all threads.
         """
         # Let's wait with closing afer we're sure that the sniffer started. Protects us
-        # from very short tests (NOTE: the serial_reader has a delayed started)
+        # from very short tests (NOTE: the serial_reader has a delayed started).
         while self.running.is_set() and not self.setup_done.is_set():
             time.sleep(1)
 
@@ -94,7 +95,7 @@ class Nrf802154Sniffer(object):
             self.running.clear()
 
             alive_threads = []
-            
+
             for thread in self.threads:
                 try:
                     thread.join(timeout=10)
@@ -120,7 +121,7 @@ class Nrf802154Sniffer(object):
     @staticmethod
     def extcap_interfaces():
         """
-        Wireshark-related method that returns configuration options
+        Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
         # TODO: Detect connected sniffers and print one interface per each sniffer
@@ -131,12 +132,13 @@ class Nrf802154Sniffer(object):
 
         for i in range(11, 27):
             res.append("value {control=%d}{value=%d}{display=%d}" % (Nrf802154Sniffer.CTRL_ARG_CHANNEL, i, i))
+
         return "\n".join(res)
 
     @staticmethod
     def extcap_dlts():
         """
-        Wireshark-related method that returns configuration options
+        Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
         return "dlt {number=%d}{name=IEEE802_15_4_NOFCS}{display=IEEE 802.15.4 without FCS}" % Nrf802154Sniffer.DLT_NO
@@ -144,7 +146,7 @@ class Nrf802154Sniffer(object):
     @staticmethod
     def extcap_config(option):
         """
-        Wireshark-related method that returns configuration options
+        Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
         def list_comports():
@@ -200,10 +202,10 @@ class Nrf802154Sniffer(object):
 
         if Nrf802154Sniffer.DLT == 'user':
             caplength += 6
-        pcap += struct.pack('<L', timestamp // 1000000 ) # timestamp seconds
-        pcap += struct.pack('<L', timestamp % 1000000 ) # timestamp nanoseconds
-        pcap += struct.pack('<L', caplength ) # length captured
-        pcap += struct.pack('<L', caplength ) # length in frame
+        pcap += struct.pack('<L', timestamp // 1000000 ) # Timestamp seconds
+        pcap += struct.pack('<L', timestamp % 1000000 ) # Timestamp nanoseconds
+        pcap += struct.pack('<L', caplength ) # Length captured
+        pcap += struct.pack('<L', caplength ) # Length in frame
 
         if Nrf802154Sniffer.DLT == 'user':
             pcap += struct.pack('<H', channel)
@@ -235,47 +237,38 @@ class Nrf802154Sniffer(object):
         Thread responsible for reading wireshark commands (read from fifo).
         Related to not-yet-implemented wireshark toolbar features.
         """
-        with open(fifo, 'rb', 0 ) as fn:
+        with open(fifo, 'rb', 0) as fn:
             arg = 0
             while arg != None:
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
             self.stop_sig_handler()
 
-    def control_writer(self, fifo, queue):
+    def serial_write(self):
         """
-        Thread responsible for sending wireshark commands (read from fifo).
-        Related to not-yet-implemented wireshark toolbar features.
-        """
-        with open(fifo, 'wb', 0 ) as fn:
-            while self.running.is_set():
-                time.sleep(1)
-
-    def serial_write(self, ser):
-        """
-        Function responsible for sending commands to serial port
+        Function responsible for sending commands to serial port.
         """
         command = self.serial_queue.get(block=True, timeout=1)
         try:
-            ser.write(command + b'\r\n')
-            ser.write(b'\r\n')
+            self.serial.write(command + b'\r\n')
+            self.serial.write(b'\r\n')
         except IOError:
             self.logger.error("Cannot write to {}".format(self))
             self.running.clear()
 
-    def serial_writer(self, ser):
+    def serial_writer(self):
         """
-        Thread responsible for sending commands to serial port
+        Thread responsible for sending commands to serial port.
         """
         while self.running.is_set():
             try:
-                self.serial_write(ser)
+                self.serial_write()
             except Queue.Empty:
                 pass
 
-        # Write final commands and break out
+        # Write final commands and break out.
         while True:
             try:
-                self.serial_write(ser)
+                self.serial_write()
             except Queue.Empty:
                 break
 
@@ -283,61 +276,61 @@ class Nrf802154Sniffer(object):
         """
         Thread responsible for reading from serial port, parsing the output and storing parsed packets into queue.
         """
-        # Wireshark needs this sleep for reset purposes
-        time.sleep(2)
+        while self.running.is_set():
+            try:
+                self.serial = Serial(dev, timeout=1)
+                break
+            except Exception, e:
+                self.logger.debug("Can't open serial device: {} reason: {}".format(dev, e))
+                time.sleep(0.5)
+
         try:
-            with Serial(dev, timeout=1) as ser:
-                ser.reset_input_buffer()
-                ser.reset_output_buffer()
+            self.serial.reset_input_buffer()
+            self.serial.reset_output_buffer()
 
-                writer_thread = threading.Thread(target=self.serial_writer, args=(ser,), name="writer_thread")
-                writer_thread.start()
+            init_cmd = []
+            init_cmd.append(b'')
+            init_cmd.append(b'sleep')
+            init_cmd.append(b'promiscuous on')
+            init_cmd.append(b'channel ' + bytes(str(channel).encode()))
+            for cmd in init_cmd:
+                self.serial_queue.put(cmd)
 
-                buf = b''
+            # Function serial_write appends twice '\r\n' to each command, so we have to calculate that for the echo.
+            init_res = self.serial.read(len(b"".join(c + b"\r\n\r\n" for c in init_cmd)))
 
-                #TODO: Disable auto ack
-                init_cmd = []
-                init_cmd.append(b'')
-                init_cmd.append(b'promiscuous on')
-                init_cmd.append(b'channel ' + bytes(str(channel).encode()))
-                for cmd in init_cmd:
-                    self.serial_queue.put(cmd)
+            if not all(cmd.decode() in init_res.decode() for cmd in init_cmd):
+                msg = "{} did not reply properly to setup commands. Please re-plug the device and make sure firmware is correct. " \
+                        "Recieved: {}\n".format(self, init_res)
+                self.logger.error(msg)
 
-                # serial_write appends twice '\r\n' to each command, so we have to calculate that for the echo
-                init_res = ser.read(len(b"".join(c + b"\r\n\r\n" for c in init_cmd)))
+            self.serial_queue.put(b'receive')
+            self.setup_done.set()
 
-                if not all(cmd.decode() in init_res.decode() for cmd in init_cmd):
-                    msg = "{} did not reply properly to setup commands. Is it flashed properly? " \
-                          "Recieved: {}\n".format(self, init_res)
-                    self.logger.error(msg)
+            buf = b''
 
-                self.serial_queue.put(b'receive')
-                self.setup_done.set()
-                while self.running.is_set():
-                    ch = ser.read()
-                    if ch != b'\n':
-                        buf += ch
-                    else:
-                        m = re.search(self.RCV_REGEX, str(buf))
-                        if m:
-                            packet = a2b_hex(m.group(1)[:-4])
-                            rssi = int(m.group(2))
-                            lqi = int(m.group(3))
-                            timestamp = int(m.group(4)) & 0xffffffff
-                            channel = int(channel)
-                            queue.put(self.pcap_packet(packet, channel, rssi, lqi, timestamp))
-                        buf = b''
+            while self.running.is_set():
+                ch = self.serial.read()
+                if ch == b'':
+                    continue
+                elif ch != '\n':
+                    buf += ch
+                else:
+                    m = re.search(self.RCV_REGEX, str(buf))
+                    if m:
+                        packet = a2b_hex(m.group(1)[:-4])
+                        rssi = int(m.group(2))
+                        lqi = int(m.group(3))
+                        timestamp = int(m.group(4)) & 0xffffffff
+                        channel = int(channel)
+                        queue.put(self.pcap_packet(packet, channel, rssi, lqi, timestamp))
+                    buf = b''
 
-                writer_thread.join()
-
-                # Let's clear serial link buffer after writer_thread is finished.
-                while ser.read():
-                    pass
-        except (serialutil.SerialException, serialutil.SerialTimeoutException):
-            raise RuntimeError("Cannot communicate with '{}' serial device: {}".format(self, dev))
+        except (serialutil.SerialException, serialutil.SerialTimeoutException), e:
+            self.logger.error("Cannot communicate with serial device: {} reason: {}".format(dev, e))
         finally:
-            self.setup_done.set()  # in case it wasn't set before
-            if self.running.is_set():  # another precaution
+            self.setup_done.set()  # In case it wasn't set before.
+            if self.running.is_set():  # Another precaution.
                 self.stop_sig_handler()
 
     def fifo_writer(self, fifo, queue):
@@ -377,8 +370,9 @@ class Nrf802154Sniffer(object):
         if control_in:
             self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
 
-        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_thread"))
-        self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_thread"))
+        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_reader"))
+        self.threads.append(threading.Thread(target=self.serial_writer, name="serial_writer"))
+        self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_writer"))
 
         for thread in self.threads:
             thread.start()
@@ -389,7 +383,7 @@ class Nrf802154Sniffer(object):
     @staticmethod
     def parse_args():
         """
-        Helper methods to make the standalone script work in console and wireshark
+        Helper methods to make the standalone script work in console and wireshark.
         """
         parser = ArgumentParser(description="Extcap program for the nRF 802.15.4 sniffer")
 
@@ -449,4 +443,3 @@ if is_standalone:
             sniffer_comm.extcap_capture(args.fifo, args.dev, channel, args.extcap_control_in, args.extcap_control_out)
         except KeyboardInterrupt as e:
             sniffer_comm.stop_sig_handler()
-
