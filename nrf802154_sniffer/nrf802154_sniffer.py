@@ -85,7 +85,7 @@ class Nrf802154Sniffer(object):
         Function responsible for stopping the sniffer firmware and closing all threads.
         """
         # Let's wait with closing afer we're sure that the sniffer started. Protects us
-        # from very short tests (NOTE: the serial_reader has a delayed started).
+        # from very short tests (NOTE: the serial_reader has a delayed start).
         while self.running.is_set() and not self.setup_done.is_set():
             time.sleep(1)
 
@@ -276,11 +276,13 @@ class Nrf802154Sniffer(object):
         """
         Thread responsible for reading from serial port, parsing the output and storing parsed packets into queue.
         """
+        time.sleep(2)
+
         while self.running.is_set():
             try:
                 self.serial = Serial(dev, timeout=1)
                 break
-            except Exception, e:
+            except Exception as e:
                 self.logger.debug("Can't open serial device: {} reason: {}".format(dev, e))
                 time.sleep(0.5)
 
@@ -326,7 +328,7 @@ class Nrf802154Sniffer(object):
                         queue.put(self.pcap_packet(packet, channel, rssi, lqi, timestamp))
                     buf = b''
 
-        except (serialutil.SerialException, serialutil.SerialTimeoutException), e:
+        except (serialutil.SerialException, serialutil.SerialTimeoutException) as e:
             self.logger.error("Cannot communicate with serial device: {} reason: {}".format(dev, e))
         finally:
             self.setup_done.set()  # In case it wasn't set before.
