@@ -63,6 +63,10 @@ class Nrf802154Sniffer(object):
     DLT='802.15.4'
     DLT_NO = 147 if DLT == 'user' else 230
 
+    # USB device identification.
+    NORDICSEMI_VID = 0x1915
+    SNIFFER_802154_PID = 0x0154
+
     # Helpers for Wireshark argument parsing.
     CTRL_ARG_CHANNEL = 0
 
@@ -152,7 +156,8 @@ class Nrf802154Sniffer(object):
         def list_comports():
             result = []
             for port in comports():
-                result.append ( (1, port[0], port[0], "false") )
+                if port.vid == Nrf802154Sniffer.NORDICSEMI_VID and port.pid == Nrf802154Sniffer.SNIFFER_802154_PID:
+                    result.append ( (1, port.device, port.device, "false") )
             return result
 
         args = []
