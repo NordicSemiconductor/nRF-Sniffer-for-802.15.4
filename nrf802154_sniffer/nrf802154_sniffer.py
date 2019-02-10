@@ -69,6 +69,19 @@ class Nrf802154Sniffer(object):
 
     # Helpers for Wireshark argument parsing.
     CTRL_ARG_CHANNEL = 0
+    CTRL_ARG_NONE = 255
+
+    # Helpers for Wireshark commands parsing.
+    CTRL_CMD_INITIALIZED = 0
+    CTRL_CMD_SET         = 1
+    CTRL_CMD_ADD         = 2
+    CTRL_CMD_REMOVE      = 3
+    CTRL_CMD_ENABLE      = 4
+    CTRL_CMD_DISABLE     = 5
+    CTRL_CMD_STATUSBAR   = 6
+    CTRL_CMD_INFORMATION = 7
+    CTRL_CMD_WARNING     = 8
+    CTRL_CMD_ERROR       = 9
 
     # Pattern for packets being printed over serial.
     RCV_REGEX = 'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
@@ -78,7 +91,10 @@ class Nrf802154Sniffer(object):
     def __init__(self):
         self.serial = None
         self.serial_queue = Queue.Queue()
+        self.control_queue = Queue.Queue()
         self.running = threading.Event()
+        self.initialized = threading.Event()
+        self.initialized.clear()
         self.setup_done = threading.Event()
         self.setup_done.clear()
         self.logger = logging.getLogger(__name__)
@@ -280,13 +296,55 @@ class Nrf802154Sniffer(object):
     def control_reader(self, fifo):
         """
         Thread responsible for reading wireshark commands (read from fifo).
-        Related to not-yet-implemented wireshark toolbar features.
         """
         with open(fifo, 'rb', 0) as fn:
             arg = 0
             while arg != None:
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
+
+                if typ == Nrf802154Sniffer.CTRL_CMD_INITIALIZED:
+                    self.initialized.set()
+                elif arg == Nrf802154Sniffer.CTRL_ARG_CHANNEL and typ == Nrf802154Sniffer.CTRL_CMD_SET and payload:
+                    self.serial_queue.put(b'channel ' + payload)
+
             self.stop_sig_handler()
+
+    def control_send(self, arg, typ, payload):
+        """
+        Function responsible for preparing Wireshark command and putting it to send queue.
+        """
+        packet = bytearray()
+        packet += struct.pack('>sBHBB', b'T', 0, len(payload) + 2, arg, typ)
+        if sys.version_info[0] >= 3 and isinstance(payload, str):
+            packet += payload.encode('utf-8')
+        else:
+            packet += payload
+        self.control_queue.put(packet)
+
+    def control_write(self, fn):
+        """
+        Function responsible for writing single command from command queue to Wireshark configuration fifo.
+        """
+        command = self.control_queue.get(block=True, timeout=1)
+        try:
+            fn.write(command)
+        except IOError:
+            self.logger.error("Cannot write to {}".format(self))
+            self.running.clear()
+
+    def control_writer(self, fifo):
+        """
+        Thread responsible for writing wireshark commands (write to fifo).
+        """
+        while self.running.is_set() and not self.initialized.is_set():
+            time.sleep(.1)  # Wait for initial control values
+
+        with open(fifo, 'wb', 0) as fn:
+            while self.running.is_set():
+                try:
+                    self.control_write(fn)
+                except Queue.Empty:
+                    pass
 
     def serial_write(self):
         """
@@ -349,6 +407,7 @@ class Nrf802154Sniffer(object):
                 msg = "{} did not reply properly to setup commands. Please re-plug the device and make sure firmware is correct. " \
                         "Recieved: {}\n".format(self, init_res)
                 self.logger.error(msg)
+                self.control_send(Nrf802154Sniffer.CTRL_ARG_NONE, Nrf802154Sniffer.CTRL_CMD_ERROR, msg.encode())
 
             self.serial_queue.put(b'receive')
             self.setup_done.set()
@@ -359,7 +418,7 @@ class Nrf802154Sniffer(object):
                 ch = self.serial.read()
                 if ch == b'':
                     continue
-                elif ch != '\n':
+                elif ch != b'\n' and ch != '\n':
                     buf += ch
                 else:
                     m = re.search(self.RCV_REGEX, str(buf))
@@ -412,7 +471,11 @@ class Nrf802154Sniffer(object):
         self.dev = dev
         self.running.set()
 
-        # TODO: Add toolbar with channel selector (channel per interface?)
+        if control_out:
+            self.threads.append(threading.Thread(target=self.control_writer, args=(control_out,)))
+            if self.channel:
+                self.control_send(Nrf802154Sniffer.CTRL_ARG_CHANNEL, Nrf802154Sniffer.CTRL_CMD_SET, self.channel.encode())
+
         if control_in:
             self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
 
