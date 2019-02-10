@@ -128,10 +128,12 @@ class Nrf802154Sniffer(object):
         Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
-        # TODO: Detect connected sniffers and print one interface per each sniffer
         res = []
         res.append("extcap {version=1.0}{help=https://github.com/NordicSemiconductor/nRF-IEEE-802.15.4-radio-driver}{display=nRF 802.15.4 sniffer}")
-        res.append("interface {value=nrf802154}{display=nRF 802.15.4 sniffer}")
+        for port in comports():
+            if port.vid == Nrf802154Sniffer.NORDICSEMI_VID and port.pid == Nrf802154Sniffer.SNIFFER_802154_PID:
+                res.append ("interface {value=%s}{display=nRF 802.15.4 sniffer}" % (port.device,) )
+
         res.append("control {number=%d}{type=selector}{display=Channel}{tooltip=IEEE 802.15.4 channel}" % Nrf802154Sniffer.CTRL_ARG_CHANNEL)
 
         for i in range(11, 27):
@@ -153,30 +155,17 @@ class Nrf802154Sniffer(object):
         Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
-        def list_comports():
-            result = []
-            for port in comports():
-                if port.vid == Nrf802154Sniffer.NORDICSEMI_VID and port.pid == Nrf802154Sniffer.SNIFFER_802154_PID:
-                    result.append ( (1, port.device, port.device, "false") )
-            return result
-
         args = []
         values = []
         res =[]
 
         args.append ( (0, '--channel', 'Channel', 'IEEE 802.15.4 channel', 'selector', '{required=true}{default=11}') )
-        # TODO: Instead of 'dev', 'interface' should define connected sniffer.
-        args.append ( (1, '--dev', 'Device', 'Serial device connected to the sniffer', 'selector', '{required=true}{reload=true}{placeholder=Loading serial devices ...}'))
-
-        if option == "dev":
-            values = list_comports()
 
         if len(option) <= 0:
             for arg in args:
                 res.append("arg {number=%d}{call=%s}{display=%s}{tooltip=%s}{type=%s}%s" % arg)
 
             values = values + [ (0, "%d" % i, "%d" % i, "true" if i == 11 else "false" ) for i in range(11,27) ]
-            values = values + list_comports()
 
         for value in values:
             res.append("value {arg=%d}{value=%s}{display=%s}{default=%s}" % value)
@@ -410,8 +399,8 @@ class Nrf802154Sniffer(object):
 
         result = parser.parse_args()
 
-        if result.capture and not result.dev:
-            parser.error("--dev is required if --capture is present")
+        if result.capture and not result.extcap_interface:
+            parser.error("--extcap-interface is required if --capture is present")
 
         return result
 
@@ -447,6 +436,6 @@ if is_standalone:
         signal.signal(signal.SIGINT, sniffer_comm.stop_sig_handler)
         signal.signal(signal.SIGTERM, sniffer_comm.stop_sig_handler)
         try:
-            sniffer_comm.extcap_capture(args.fifo, args.dev, channel, args.extcap_control_in, args.extcap_control_out)
+            sniffer_comm.extcap_capture(args.fifo, args.extcap_interface, channel, args.extcap_control_in, args.extcap_control_out)
         except KeyboardInterrupt as e:
             sniffer_comm.stop_sig_handler()
