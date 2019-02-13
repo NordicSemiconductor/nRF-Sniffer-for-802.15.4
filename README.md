@@ -85,6 +85,17 @@ If Wireshark uses incorrect dissectors to decode a message you have an option to
 * ZigBee
 * ZigBee Green Power
 
+	
+## Configuring Wireshark for Zigbee
+
+To capture the data for Zigbee examples in SDK, you must manually configure Wireshark:
+1. Press Ctrl + Shift + P to enter the Wireshark preferences.
+2. Go to `Protocols -> Zigbee`.
+3. Click the `Edit` button next to Pre-configured Keys. The Pre-configured Keys window appears.
+4. Add two entries by clicking on the "+" button:
+    - Key: `5A:69:67:42:65:65:41:6C:6C:69:61:6E:63:65:30:39`, Byte Order: Normal, Label: ZigbeeAlliance09
+    - Key: `ab:cd:ef:01:23:45:67:89:00:00:00:00:00:00:00:00`, Byte Order: Normal, Label: Nordic Examples
+
 ## Custom Wireshark dissector
 Custom wireshark dissector can be used to obtain additional informations from sniffer. Channel, RSSI and LQI can be displayed for every packet.
 
