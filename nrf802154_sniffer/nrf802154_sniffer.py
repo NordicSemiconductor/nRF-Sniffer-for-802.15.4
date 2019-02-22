@@ -65,13 +65,15 @@ class Nrf802154Sniffer(object):
 
     # USB device identification.
     NORDICSEMI_VID = 0x1915
-    SNIFFER_802154_PID = 0x0154
+    SNIFFER_802154_PID = 0x154A
 
     # Helpers for Wireshark argument parsing.
     CTRL_ARG_CHANNEL = 0
 
     # Pattern for packets being printed over serial.
     RCV_REGEX = 'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
+
+    TIMER_MAX = 2**32
 
     def __init__(self):
         self.serial = None
@@ -83,6 +85,55 @@ class Nrf802154Sniffer(object):
         self.dev = None
         self.channel = None
         self.threads = []
+
+        # Time correction variables.
+        self.first_local_timestamp = None
+        self.first_sniffer_timestamp = None
+
+    def correct_time(self, sniffer_timestamp):
+        """
+        Function responsible for correcting the time reported by the sniffer.
+        The sniffer timer has 1us resolution and will overflow after
+        approximately every 72 minutes of operation.
+        For that reason it is necessary to use the local system timer to find the absolute
+        time frame, within which the packet has arrived.
+
+        This method should work as long as the MCU and PC timers don't drift
+        from each other by a value of approximately 36 minutes.
+
+        :param sniffer_timestamp: sniffer timestamp in microseconds
+        :return: absolute sniffer timestamp in microseconds
+        """
+        if self.first_local_timestamp is None:
+            # First received packets - set the reference time and convert to microseconds.
+            self.first_local_timestamp = int(time.time()*(10**6))
+            self.first_sniffer_timestamp = sniffer_timestamp
+            return sniffer_timestamp
+        else:
+            local_timestamp = int(time.time()*(10**6))
+            time_difference = local_timestamp - self.first_local_timestamp
+
+            # Absolute sniffer timestamp calculated locally
+            absolute_sniffer_timestamp = self.first_sniffer_timestamp + time_difference
+
+            overflow_count = absolute_sniffer_timestamp // self.TIMER_MAX
+            timestamp_modulo = absolute_sniffer_timestamp % self.TIMER_MAX
+
+            # Handle the corner case - sniffer timer is about to overflow.
+            # Due to drift the locally calculated absolute timestamp reports that the overflow
+            # has already occurred. If the modulo of calculated time with added value of half timer period
+            # is smaller than the sniffer timestamp, then we decrement the overflow counter.
+            #
+            # The second corner case is when the sniffer timestamp just overflowed and the value is close to zero.
+            # Locally calculated timestamp reports that the overflow hasn't yet occurred. We ensure that this is the
+            # case by testing if the sniffer timestamp is less than modulo of calculated timestamp substracted by
+            # half of timer period. In this case we increment overflow count.
+            if (timestamp_modulo + self.TIMER_MAX//2) < sniffer_timestamp:
+                overflow_count -= 1
+            elif (timestamp_modulo - self.TIMER_MAX//2) > sniffer_timestamp:
+                overflow_count += 1
+
+            return sniffer_timestamp + overflow_count * self.TIMER_MAX
 
     def stop_sig_handler(self, *args, **kwargs):
         """
@@ -197,7 +248,7 @@ class Nrf802154Sniffer(object):
         if Nrf802154Sniffer.DLT == 'user':
             caplength += 6
         pcap += struct.pack('<L', timestamp // 1000000 ) # Timestamp seconds
-        pcap += struct.pack('<L', timestamp % 1000000 ) # Timestamp nanoseconds
+        pcap += struct.pack('<L', timestamp % 1000000 ) # Timestamp microseconds
         pcap += struct.pack('<L', caplength ) # Length captured
         pcap += struct.pack('<L', caplength ) # Length in frame
 
@@ -287,7 +338,6 @@ class Nrf802154Sniffer(object):
             init_cmd = []
             init_cmd.append(b'')
             init_cmd.append(b'sleep')
-            init_cmd.append(b'promiscuous on')
             init_cmd.append(b'channel ' + bytes(str(channel).encode()))
             for cmd in init_cmd:
                 self.serial_queue.put(cmd)
@@ -319,7 +369,7 @@ class Nrf802154Sniffer(object):
                         lqi = int(m.group(3))
                         timestamp = int(m.group(4)) & 0xffffffff
                         channel = int(channel)
-                        queue.put(self.pcap_packet(packet, channel, rssi, lqi, timestamp))
+                        queue.put(self.pcap_packet(packet, channel, rssi, lqi, self.correct_time(timestamp)))
                     buf = b''
 
         except (serialutil.SerialException, serialutil.SerialTimeoutException) as e:
