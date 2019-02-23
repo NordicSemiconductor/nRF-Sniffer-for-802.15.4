@@ -305,6 +305,9 @@ class Nrf802154Sniffer(object):
                 if typ == Nrf802154Sniffer.CTRL_CMD_INITIALIZED:
                     self.initialized.set()
                 elif arg == Nrf802154Sniffer.CTRL_ARG_CHANNEL and typ == Nrf802154Sniffer.CTRL_CMD_SET and payload:
+                    self.channel = int(payload)
+                    while self.running.is_set() and not self.setup_done.is_set():
+                        time.sleep(0.1)
                     self.serial_queue.put(b'channel ' + payload)
 
             self.stop_sig_handler()
@@ -375,7 +378,7 @@ class Nrf802154Sniffer(object):
             except Queue.Empty:
                 break
 
-    def serial_reader(self, dev, channel, queue):
+    def serial_reader(self, dev, queue):
         """
         Thread responsible for reading from serial port, parsing the output and storing parsed packets into queue.
         """
@@ -396,7 +399,7 @@ class Nrf802154Sniffer(object):
             init_cmd = []
             init_cmd.append(b'')
             init_cmd.append(b'sleep')
-            init_cmd.append(b'channel ' + bytes(str(channel).encode()))
+            init_cmd.append(b'channel ' + bytes(str(self.channel).encode()))
             for cmd in init_cmd:
                 self.serial_queue.put(cmd)
 
@@ -427,7 +430,7 @@ class Nrf802154Sniffer(object):
                         rssi = int(m.group(2))
                         lqi = int(m.group(3))
                         timestamp = int(m.group(4)) & 0xffffffff
-                        channel = int(channel)
+                        channel = int(self.channel)
                         queue.put(self.pcap_packet(packet, channel, rssi, lqi, self.correct_time(timestamp)))
                     buf = b''
 
@@ -473,18 +476,22 @@ class Nrf802154Sniffer(object):
 
         if control_out:
             self.threads.append(threading.Thread(target=self.control_writer, args=(control_out,)))
-            if self.channel:
-                self.control_send(Nrf802154Sniffer.CTRL_ARG_CHANNEL, Nrf802154Sniffer.CTRL_CMD_SET, self.channel.encode())
 
         if control_in:
             self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
 
-        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_reader"))
+        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, packet_queue), name="serial_reader"))
         self.threads.append(threading.Thread(target=self.serial_writer, name="serial_writer"))
         self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_writer"))
 
         for thread in self.threads:
             thread.start()
+
+        while self.running.is_set() and not self.initialized.is_set():
+            time.sleep(0.1)
+
+        time.sleep(0.1)
+        self.control_send(Nrf802154Sniffer.CTRL_ARG_CHANNEL, Nrf802154Sniffer.CTRL_CMD_SET, str(self.channel).encode())
 
         while is_standalone and self.running.is_set():
             time.sleep(1)
