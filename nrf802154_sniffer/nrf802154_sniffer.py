@@ -372,6 +372,9 @@ class Nrf802154Sniffer(object):
         if len(self.threads):
             raise RuntimeError("Old threads were not joined properly")
 
+        if self.running.is_set():
+            raise RuntimeError("{}: tried to start already running sniffer".format(self))
+
         packet_queue = Queue.Queue()
         self.channel = channel
         self.dev = dev
