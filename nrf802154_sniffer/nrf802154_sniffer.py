@@ -151,6 +151,17 @@ class Nrf802154Sniffer(object):
 
             return sniffer_timestamp + overflow_count * self.TIMER_MAX
 
+    def update_channel(self, channel):
+        """
+        Function for updating sniffing channel after sniffing started
+
+        :param channel: channel number (11-26)
+        """
+        self.channel = channel
+        while self.running.is_set() and not self.setup_done.is_set():
+            time.sleep(0.1)
+        self.serial_queue.put(b'channel ' + str(self.channel).encode())
+
     def stop_sig_handler(self, *args, **kwargs):
         """
         Function responsible for stopping the sniffer firmware and closing all threads.
@@ -305,10 +316,7 @@ class Nrf802154Sniffer(object):
                 if typ == Nrf802154Sniffer.CTRL_CMD_INITIALIZED:
                     self.initialized.set()
                 elif arg == Nrf802154Sniffer.CTRL_ARG_CHANNEL and typ == Nrf802154Sniffer.CTRL_CMD_SET and payload:
-                    self.channel = int(payload)
-                    while self.running.is_set() and not self.setup_done.is_set():
-                        time.sleep(0.1)
-                    self.serial_queue.put(b'channel ' + payload)
+                    self.update_channel(int(payload))
 
             self.stop_sig_handler()
 
