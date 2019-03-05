@@ -151,7 +151,7 @@ class Nrf802154Sniffer(object):
 
             return sniffer_timestamp + overflow_count * self.TIMER_MAX
 
-    def update_channel(self, channel):
+    def set_channel(self, channel):
         """
         Function for updating sniffing channel after sniffing started
 
@@ -258,7 +258,7 @@ class Nrf802154Sniffer(object):
         header += struct.pack('<H', 2 ) # Pcap Major Version
         header += struct.pack('<H', 4 ) # Pcap Minor Version
         header += struct.pack('<I', int(0)) # Timezone
-        header += struct.pack('<I', int(0)) # Accurancy of timestamps
+        header += struct.pack('<I', int(0)) # Accuracy of timestamps
         header += struct.pack('<L', int ('000000ff', 16 )) # Max Length of capture frame
         header += struct.pack('<L', self.DLT_NO) # DLT
         return header
@@ -316,7 +316,7 @@ class Nrf802154Sniffer(object):
                 if typ == Nrf802154Sniffer.CTRL_CMD_INITIALIZED:
                     self.initialized.set()
                 elif arg == Nrf802154Sniffer.CTRL_ARG_CHANNEL and typ == Nrf802154Sniffer.CTRL_CMD_SET and payload:
-                    self.update_channel(int(payload))
+                    self.set_channel(int(payload))
 
             self.stop_sig_handler()
 
