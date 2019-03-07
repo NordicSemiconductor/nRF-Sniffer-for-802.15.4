@@ -108,7 +108,7 @@ class Nrf802154Sniffer(object):
             # First received packets - set the reference time and convert to microseconds.
             self.first_local_timestamp = int(time.time()*(10**6))
             self.first_sniffer_timestamp = sniffer_timestamp
-            return sniffer_timestamp
+            return self.first_local_timestamp
         else:
             local_timestamp = int(time.time()*(10**6))
             time_difference = local_timestamp - self.first_local_timestamp
@@ -133,7 +133,7 @@ class Nrf802154Sniffer(object):
             elif (timestamp_modulo - self.TIMER_MAX//2) > sniffer_timestamp:
                 overflow_count += 1
 
-            return sniffer_timestamp + overflow_count * self.TIMER_MAX
+            return self.first_local_timestamp - self.first_sniffer_timestamp + sniffer_timestamp + overflow_count * self.TIMER_MAX
 
     def stop_sig_handler(self, *args, **kwargs):
         """
