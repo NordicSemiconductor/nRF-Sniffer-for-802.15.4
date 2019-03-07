@@ -61,7 +61,14 @@ class Nrf802154Sniffer(object):
     # Various options for pcap files: http://www.tcpdump.org/linktypes.html
     #DLT='user'
     DLT='802.15.4'
-    DLT_NO = 147 if DLT == 'user' else 230
+    #DLT='802.15.4-TAP'  # Wireshark 3.0.0 and later
+
+    if DLT == '802.15.4-TAP':
+        DLT_NO = 283
+    elif DLT == 'user':
+        DLT_NO = 147
+    else:
+        DLT_NO = 230
 
     # USB device identification.
     NORDICSEMI_VID = 0x1915
@@ -198,7 +205,14 @@ class Nrf802154Sniffer(object):
         Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
-        return "dlt {number=%d}{name=IEEE802_15_4_NOFCS}{display=IEEE 802.15.4 without FCS}" % Nrf802154Sniffer.DLT_NO
+        if Nrf802154Sniffer.DLT == '802.15.4-TAP':
+            dlt = "dlt {number=%d}{name=IEEE802_15_4_TAP}{display=IEEE 802.15.4 TAP}" % Nrf802154Sniffer.DLT_NO
+        elif Nrf802154Sniffer.DLT == 'user':
+            dlt = "dlt {number=%d}{name=USER_0}{display=User 0 (DLT=147)}" % Nrf802154Sniffer.DLT_NO
+        else:
+            dlt = "dlt {number=%d}{name=IEEE802_15_4_NOFCS}{display=IEEE 802.15.4 without FCS}" % Nrf802154Sniffer.DLT_NO
+
+        return dlt
 
     @staticmethod
     def extcap_config(option):
@@ -245,14 +259,24 @@ class Nrf802154Sniffer(object):
 
         caplength = len(frame)
 
-        if Nrf802154Sniffer.DLT == 'user':
+        if Nrf802154Sniffer.DLT == '802.15.4-TAP':
+            caplength += 28
+        elif Nrf802154Sniffer.DLT == 'user':
             caplength += 6
+
         pcap += struct.pack('<L', timestamp // 1000000 ) # Timestamp seconds
         pcap += struct.pack('<L', timestamp % 1000000 ) # Timestamp microseconds
         pcap += struct.pack('<L', caplength ) # Length captured
         pcap += struct.pack('<L', caplength ) # Length in frame
 
-        if Nrf802154Sniffer.DLT == 'user':
+        if Nrf802154Sniffer.DLT == '802.15.4-TAP':
+            # Append TLVs according to 802.15.4 TAP specification:
+            # https://github.com/jkcko/ieee802.15.4-tap
+            pcap += struct.pack('<HH', 0, 28)
+            pcap += struct.pack('<HHf', 1, 4, rssi)
+            pcap += struct.pack('<HHHH', 3, 3, channel, 0)
+            pcap += struct.pack('<HHI', 10, 1, lqi)
+        elif Nrf802154Sniffer.DLT == 'user':
             pcap += struct.pack('<H', channel)
             pcap += struct.pack('<h', rssi)
             pcap += struct.pack('<H', lqi)
