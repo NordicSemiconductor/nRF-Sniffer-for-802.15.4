@@ -56,7 +56,7 @@ Ensure that Python directory is included in your `PATH` system environment varia
 1. Run Wireshark.
 2. Click the gear icon next to the 'nRF 802.15.4 sniffer'.
 3. Select the 802.15.4 channel.
-4. Select the serial port associated with the board that you flashed the firmware on.
+4. Select the format for out-of-band meta-data.
 5. Click 'Start'.
 
 ## Wireshark configuration for Thread
@@ -85,7 +85,6 @@ If Wireshark uses incorrect dissectors to decode a message you have an option to
 * ZigBee
 * ZigBee Green Power
 
-	
 ## Configuring Wireshark for Zigbee
 
 To capture the data for Zigbee examples in SDK, you must manually configure Wireshark:
@@ -96,23 +95,14 @@ To capture the data for Zigbee examples in SDK, you must manually configure Wire
     - Key: `5A:69:67:42:65:65:41:6C:6C:69:61:6E:63:65:30:39`, Byte Order: Normal, Label: ZigbeeAlliance09
     - Key: `ab:cd:ef:01:23:45:67:89:00:00:00:00:00:00:00:00`, Byte Order: Normal, Label: Nordic Examples
 
-## Custom Wireshark dissector
-Custom wireshark dissector can be used to obtain additional informations from sniffer. Channel, RSSI and LQI can be displayed for every packet.
+## Out-Of-Band meta-data
+The sniffer can provide additional information such as channel, RSSI and LQI for every packet. The format used for this is configurable in the Interface Options dialog (the gear icon next to the 'nRF 802.15.4 sniffer'). Depending on the Wireshark version this can be configured in two ways:
+
+1. For Wireshark 3.0 and later: Select "IEEE 802.15.4 TAP".
+2. For Wireshark 2.4 and 2.6: Install a custom Lua dissector and select "Custom Lua dissector".
 
 ### Install Lua dissector
 Copy the provided script to the appropriate directory (it can be found in `About Wireshark -> Folders -> Personal Lua Plugins`):
 ```
 sudo cp nrf802154_sniffer/nrf802154_sniffer.lua /usr/lib/x86_64-linux-gnu/wireshark/plugins/
 ```
-### Modify extcap script
-Modify `nrf802154_sniffer.py`:
-
-`sudo nano /usr/lib/x86_64-linux-gnu/wireshark/extcap/nrf802154_sniffer.py`
-- Uncomment line 64:
-    ```python
-    DLT='user'
-    ```
-- Comment line 65:
-    ```python
-    #DLT='802.15.4'
-    ```

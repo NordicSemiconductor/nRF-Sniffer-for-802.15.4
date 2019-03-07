@@ -59,16 +59,9 @@ from serial.tools.list_ports import comports
 class Nrf802154Sniffer(object):
 
     # Various options for pcap files: http://www.tcpdump.org/linktypes.html
-    #DLT='user'
-    DLT='802.15.4'
-    #DLT='802.15.4-TAP'  # Wireshark 3.0.0 and later
-
-    if DLT == '802.15.4-TAP':
-        DLT_NO = 283
-    elif DLT == 'user':
-        DLT_NO = 147
-    else:
-        DLT_NO = 230
+    DLT_USER0 = 147
+    DLT_IEEE802_15_4_NOFCS = 230
+    DLT_IEEE802_15_4_TAP = 283
 
     # USB device identification.
     NORDICSEMI_VID = 0x1915
@@ -91,6 +84,7 @@ class Nrf802154Sniffer(object):
         self.logger = logging.getLogger(__name__)
         self.dev = None
         self.channel = None
+        self.dlt = None
         self.threads = []
 
         # Time correction variables.
@@ -205,14 +199,12 @@ class Nrf802154Sniffer(object):
         Wireshark-related method that returns configuration options.
         :return: string with wireshark-compatible information
         """
-        if Nrf802154Sniffer.DLT == '802.15.4-TAP':
-            dlt = "dlt {number=%d}{name=IEEE802_15_4_TAP}{display=IEEE 802.15.4 TAP}" % Nrf802154Sniffer.DLT_NO
-        elif Nrf802154Sniffer.DLT == 'user':
-            dlt = "dlt {number=%d}{name=USER_0}{display=User 0 (DLT=147)}" % Nrf802154Sniffer.DLT_NO
-        else:
-            dlt = "dlt {number=%d}{name=IEEE802_15_4_NOFCS}{display=IEEE 802.15.4 without FCS}" % Nrf802154Sniffer.DLT_NO
+        res = []
+        res.append("dlt {number=%d}{name=IEEE802_15_4_NOFCS}{display=IEEE 802.15.4 without FCS}" % Nrf802154Sniffer.DLT_IEEE802_15_4_NOFCS)
+        res.append("dlt {number=%d}{name=IEEE802_15_4_TAP}{display=IEEE 802.15.4 TAP}" % Nrf802154Sniffer.DLT_IEEE802_15_4_TAP)
+        res.append("dlt {number=%d}{name=USER0}{display=User 0 (DLT=147)}" % Nrf802154Sniffer.DLT_USER0)
 
-        return dlt
+        return "\n".join(res)
 
     @staticmethod
     def extcap_config(option):
@@ -225,12 +217,19 @@ class Nrf802154Sniffer(object):
         res =[]
 
         args.append ( (0, '--channel', 'Channel', 'IEEE 802.15.4 channel', 'selector', '{required=true}{default=11}') )
+        args.append ( (1, '--metadata', 'Out-Of-Band meta-data',
+                          'Packet header containing out-of-band meta-data for channel, RSSI and LQI',
+                          'selector', '{default=none}') )
 
         if len(option) <= 0:
             for arg in args:
                 res.append("arg {number=%d}{call=%s}{display=%s}{tooltip=%s}{type=%s}%s" % arg)
 
             values = values + [ (0, "%d" % i, "%d" % i, "true" if i == 11 else "false" ) for i in range(11,27) ]
+
+            values.append ( (1, "none", "None", "true") )
+            values.append ( (1, "ieee802154-tap", "IEEE 802.15.4 TAP", "false") )
+            values.append ( (1, "user", "Custom Lua dissector", "false") )
 
         for value in values:
             res.append("value {arg=%d}{value=%s}{display=%s}{default=%s}" % value)
@@ -247,11 +246,11 @@ class Nrf802154Sniffer(object):
         header += struct.pack('<I', int(0)) # Timezone
         header += struct.pack('<I', int(0)) # Accurancy of timestamps
         header += struct.pack('<L', int ('000000ff', 16 )) # Max Length of capture frame
-        header += struct.pack('<L', self.DLT_NO) # DLT
+        header += struct.pack('<L', self.dlt) # DLT
         return header
 
     @staticmethod
-    def pcap_packet(frame, channel, rssi, lqi, timestamp):
+    def pcap_packet(frame, dlt, channel, rssi, lqi, timestamp):
         """
         Creates pcap packet to be seved in pcap file.
         """
@@ -259,9 +258,9 @@ class Nrf802154Sniffer(object):
 
         caplength = len(frame)
 
-        if Nrf802154Sniffer.DLT == '802.15.4-TAP':
+        if dlt == Nrf802154Sniffer.DLT_IEEE802_15_4_TAP:
             caplength += 28
-        elif Nrf802154Sniffer.DLT == 'user':
+        elif dlt == Nrf802154Sniffer.DLT_USER0:
             caplength += 6
 
         pcap += struct.pack('<L', timestamp // 1000000 ) # Timestamp seconds
@@ -269,14 +268,14 @@ class Nrf802154Sniffer(object):
         pcap += struct.pack('<L', caplength ) # Length captured
         pcap += struct.pack('<L', caplength ) # Length in frame
 
-        if Nrf802154Sniffer.DLT == '802.15.4-TAP':
+        if dlt == Nrf802154Sniffer.DLT_IEEE802_15_4_TAP:
             # Append TLVs according to 802.15.4 TAP specification:
             # https://github.com/jkcko/ieee802.15.4-tap
             pcap += struct.pack('<HH', 0, 28)
             pcap += struct.pack('<HHf', 1, 4, rssi)
             pcap += struct.pack('<HHHH', 3, 3, channel, 0)
             pcap += struct.pack('<HHI', 10, 1, lqi)
-        elif Nrf802154Sniffer.DLT == 'user':
+        elif dlt == Nrf802154Sniffer.DLT_USER0:
             pcap += struct.pack('<H', channel)
             pcap += struct.pack('<h', rssi)
             pcap += struct.pack('<H', lqi)
@@ -393,7 +392,7 @@ class Nrf802154Sniffer(object):
                         lqi = int(m.group(3))
                         timestamp = int(m.group(4)) & 0xffffffff
                         channel = int(channel)
-                        queue.put(self.pcap_packet(packet, channel, rssi, lqi, self.correct_time(timestamp)))
+                        queue.put(self.pcap_packet(packet, self.dlt, channel, rssi, lqi, self.correct_time(timestamp)))
                     buf = b''
 
         except (serialutil.SerialException, serialutil.SerialTimeoutException) as e:
@@ -422,7 +421,7 @@ class Nrf802154Sniffer(object):
                 except Queue.Empty:
                     pass
 
-    def extcap_capture(self, fifo, dev, channel, control_in=None, control_out=None):
+    def extcap_capture(self, fifo, dev, channel, metadata=None, control_in=None, control_out=None):
         """
         Main method responsible for starting all other threads. In case of standalone execution this method will block
         until SIGTERM/SIGINT and/or stop_sig_handler disables the loop via self.running event.
@@ -435,6 +434,15 @@ class Nrf802154Sniffer(object):
         self.channel = channel
         self.dev = dev
         self.running.set()
+
+        if metadata == "ieee802154-tap":
+            # For Wireshark 3.0 and later
+            self.dlt = Nrf802154Sniffer.DLT_IEEE802_15_4_TAP
+        elif metadata == "user":
+            # For Wireshark 2.4 and 2.6
+            self.dlt = Nrf802154Sniffer.DLT_USER0
+        else:
+            self.dlt = Nrf802154Sniffer.DLT_IEEE802_15_4_NOFCS
 
         # TODO: Add toolbar with channel selector (channel per interface?)
         if control_in:
@@ -469,7 +477,7 @@ class Nrf802154Sniffer(object):
         parser.add_argument("--extcap-control-out", help="Used to send control messages to toolbar")
 
         parser.add_argument("--channel", help="IEEE 802.15.4 capture channel [11-26]")
-        parser.add_argument("--dev", help="Serial device connected to the sniffer")
+        parser.add_argument("--metadata", help="Meta-Data type to use for captured packets")
 
         result = parser.parse_args()
 
@@ -510,6 +518,6 @@ if is_standalone:
         signal.signal(signal.SIGINT, sniffer_comm.stop_sig_handler)
         signal.signal(signal.SIGTERM, sniffer_comm.stop_sig_handler)
         try:
-            sniffer_comm.extcap_capture(args.fifo, args.extcap_interface, channel, args.extcap_control_in, args.extcap_control_out)
+            sniffer_comm.extcap_capture(args.fifo, args.extcap_interface, channel, args.metadata, args.extcap_control_in, args.extcap_control_out)
         except KeyboardInterrupt as e:
             sniffer_comm.stop_sig_handler()
