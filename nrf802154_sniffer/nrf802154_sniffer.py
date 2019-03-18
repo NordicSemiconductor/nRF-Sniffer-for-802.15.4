@@ -186,11 +186,6 @@ class Nrf802154Sniffer(object):
             if port.vid == Nrf802154Sniffer.NORDICSEMI_VID and port.pid == Nrf802154Sniffer.SNIFFER_802154_PID:
                 res.append ("interface {value=%s}{display=nRF 802.15.4 sniffer}" % (port.device,) )
 
-        res.append("control {number=%d}{type=selector}{display=Channel}{tooltip=IEEE 802.15.4 channel}" % Nrf802154Sniffer.CTRL_ARG_CHANNEL)
-
-        for i in range(11, 27):
-            res.append("value {control=%d}{value=%d}{display=%d}" % (Nrf802154Sniffer.CTRL_ARG_CHANNEL, i, i))
-
         return "\n".join(res)
 
     @staticmethod
@@ -348,7 +343,7 @@ class Nrf802154Sniffer(object):
 
         while self.running.is_set():
             try:
-                self.serial = Serial(dev, timeout=1)
+                self.serial = Serial(dev, timeout=1, exclusive=True)
                 break
             except Exception as e:
                 self.logger.debug("Can't open serial device: {} reason: {}".format(dev, e))
@@ -382,7 +377,7 @@ class Nrf802154Sniffer(object):
                 ch = self.serial.read()
                 if ch == b'':
                     continue
-                elif ch != '\n':
+                elif ch != b'\n' and ch != '\n':
                     buf += ch
                 else:
                     m = re.search(self.RCV_REGEX, str(buf))
@@ -479,7 +474,7 @@ class Nrf802154Sniffer(object):
         parser.add_argument("--channel", help="IEEE 802.15.4 capture channel [11-26]")
         parser.add_argument("--metadata", help="Meta-Data type to use for captured packets")
 
-        result = parser.parse_args()
+        result, unknown = parser.parse_known_args()
 
         if result.capture and not result.extcap_interface:
             parser.error("--extcap-interface is required if --capture is present")
