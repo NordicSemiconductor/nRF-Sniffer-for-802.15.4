@@ -304,7 +304,6 @@ class Nrf802154Sniffer(object):
             arg = 0
             while arg != None:
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
-            self.stop_sig_handler()
 
     def serial_write(self):
         """
@@ -412,7 +411,8 @@ class Nrf802154Sniffer(object):
                         fh.write(packet)
                         fh.flush()
                     except IOError:
-                        pass
+                        self.stop_sig_handler()
+
                 except Queue.Empty:
                     pass
 
