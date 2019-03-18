@@ -69,6 +69,7 @@ class Nrf802154Sniffer(object):
 
     # Helpers for Wireshark argument parsing.
     CTRL_ARG_CHANNEL = 0
+    CTRL_ARG_LOGGER = 6
 
     # Pattern for packets being printed over serial.
     RCV_REGEX = 'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
@@ -185,6 +186,8 @@ class Nrf802154Sniffer(object):
         for port in comports():
             if port.vid == Nrf802154Sniffer.NORDICSEMI_VID and port.pid == Nrf802154Sniffer.SNIFFER_802154_PID:
                 res.append ("interface {value=%s}{display=nRF 802.15.4 sniffer}" % (port.device,) )
+
+        res.append("control {number=%d}{type=button}{role=logger}{display=Log}{tooltip=Show capture log}" % Nrf802154Sniffer.CTRL_ARG_LOGGER)
 
         return "\n".join(res)
 
@@ -304,6 +307,7 @@ class Nrf802154Sniffer(object):
             arg = 0
             while arg != None:
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
+            self.stop_sig_handler()
 
     def serial_write(self):
         """
@@ -411,7 +415,7 @@ class Nrf802154Sniffer(object):
                         fh.write(packet)
                         fh.flush()
                     except IOError:
-                        self.stop_sig_handler()
+                        pass
 
                 except Queue.Empty:
                     pass
