@@ -184,7 +184,7 @@ class Nrf802154Sniffer(object):
         res.append("extcap {version=0.7.2}{help=https://github.com/NordicSemiconductor/nRF-Sniffer-for-802.15.4}{display=nRF Sniffer for 802.15.4}")
         for port in comports():
             if port.vid == Nrf802154Sniffer.NORDICSEMI_VID and port.pid == Nrf802154Sniffer.SNIFFER_802154_PID:
-                res.append ("interface {value=%s}{display=nRF 802.15.4 sniffer}" % (port.device,) )
+                res.append ("interface {value=%s}{display=nRF Sniffer for 802.15.4}" % (port.device,) )
 
         return "\n".join(res)
 
@@ -458,7 +458,7 @@ class Nrf802154Sniffer(object):
         """
         Helper methods to make the standalone script work in console and wireshark.
         """
-        parser = ArgumentParser(description="Extcap program for the nRF 802.15.4 sniffer")
+        parser = ArgumentParser(description="Extcap program for the nRF Sniffer for 802.15.4")
 
         parser.add_argument("--extcap-interfaces", help="Provide a list of interfaces to capture from", action="store_true")
         parser.add_argument("--extcap-interface", help="Provide the interface to capture from")
