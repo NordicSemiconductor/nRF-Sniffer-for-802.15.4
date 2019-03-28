@@ -1,4 +1,4 @@
-# nRF 802.15.4 sniffer
+# nRF Sniffer for 802.15.4
 
 This repository contains firmware and Wireshark extcap script that can be used with nRF52840 chip as an 802.15.4 sniffer.
 
@@ -98,7 +98,7 @@ Ensure that Python directory is included in your `PATH` system environment varia
 
 ### Start sniffing
 1. Run Wireshark.
-2. Click the gear icon next to the 'nRF 802.15.4 sniffer'.
+2. Click the gear icon next to the 'nRF Sniffer for 802.15.4'.
 3. Select the 802.15.4 channel.
 4. Select the format for out-of-band meta-data.
 5. Click 'Start'.
@@ -147,7 +147,7 @@ To capture the data for Zigbee examples in SDK, you must manually configure Wire
     - Key: `ab:cd:ef:01:23:45:67:89:00:00:00:00:00:00:00:00`, Byte Order: Normal, Label: Nordic Examples
 
 ## Out-Of-Band meta-data
-The sniffer can provide additional information. For every packet, you can display channel, RSSI and LQI. The format used for this is configurable in the Interface Options dialog (the gear icon next to the 'nRF 802.15.4 sniffer'). Depending on the Wireshark version this can be configured in two ways:
+The sniffer can provide additional information. For every packet, you can display channel, RSSI and LQI. The format used for this is configurable in the Interface Options dialog (the gear icon next to the 'nRF Sniffer for 802.15.4'). Depending on the Wireshark version this can be configured in two ways:
 
 1. For Wireshark 3.0 and later: Select "IEEE 802.15.4 TAP".
 2. For Wireshark 2.4 and 2.6: Install a custom Lua dissector and select "Custom Lua dissector".
