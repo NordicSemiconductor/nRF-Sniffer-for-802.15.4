@@ -164,7 +164,7 @@ class Nrf802154Sniffer(object):
                 try:
                     thread.join(timeout=10)
                     if thread.is_alive() is True:
-                        self.logger.error("Failed to stop a thread")
+                        self.logger.error("Failed to stop thread {}".format(thread.name))
                         alive_threads.append(thread)
                 except RuntimeError:
                     # TODO: This may be called from one of threads from thread list - architecture problem
@@ -173,6 +173,11 @@ class Nrf802154Sniffer(object):
             self.threads = alive_threads
         else:
             self.logger.warning("Asked to stop {} while it was already stopped".format(self))
+
+        if self.serial is not None:
+            if self.serial.is_open is True:
+                self.serial.close()
+            self.serial = None
 
     @staticmethod
     def get_hex_path():
