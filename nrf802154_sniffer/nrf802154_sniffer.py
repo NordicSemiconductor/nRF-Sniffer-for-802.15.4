@@ -525,7 +525,7 @@ if is_standalone:
         print(sniffer_comm.extcap_config(option))
 
     if args.capture and args.fifo:
-        channel = args.channel if args.channel else 11
+        channel = args.channel if args.channel else 15
         signal.signal(signal.SIGINT, sniffer_comm.stop_sig_handler)
         signal.signal(signal.SIGTERM, sniffer_comm.stop_sig_handler)
         try:
