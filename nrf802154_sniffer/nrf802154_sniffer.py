@@ -95,7 +95,7 @@ class Nrf802154Sniffer(object):
         self.channel = None
         self.dlt = None
         self.threads = []
-        self.use_ztp = False
+        self.use_zep = False
 
         # Time correction variables.
         self.first_local_timestamp = None
@@ -262,7 +262,7 @@ class Nrf802154Sniffer(object):
         return header
 
     @staticmethod
-    def ztpv2_packet(frame, dlt, channel, rssi, lqi, timestamp):
+    def zepv2_packet(frame, dlt, channel, rssi, lqi, timestamp):
         def crc16(data: bytes):
             data = bytearray(data)
             poly = 0x8408 # G(x) = x16 + x12 + x5 + 1
@@ -434,8 +434,8 @@ class Nrf802154Sniffer(object):
                         lqi = int(m.group(3))
                         timestamp = int(m.group(4)) & 0xffffffff
                         channel = int(channel)
-                        if self.use_ztp:
-                            queue.put(self.ztpv2_packet(packet, self.dlt, channel, rssi, lqi, self.correct_time(timestamp)))
+                        if self.use_zep:
+                            queue.put(self.zepv2_packet(packet, self.dlt, channel, rssi, lqi, self.correct_time(timestamp)))
                         else:
                             queue.put(self.pcap_packet(packet, self.dlt, channel, rssi, lqi, self.correct_time(timestamp)))
                     buf = b''
@@ -467,9 +467,9 @@ class Nrf802154Sniffer(object):
                 except Queue.Empty:
                     pass
 
-    def ztp_writer(self, target, queue):
+    def zep_writer(self, target, queue):
         """
-        Thread responsible for wrapping packets in ZTPv2 frames and send them via UDP
+        Thread responsible for wrapping packets in ZEPv2 frames and send them via UDP
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -481,7 +481,7 @@ class Nrf802154Sniffer(object):
                 except Queue.Empty:
                     pass
 
-    def capture(self, fifo, ztp_target, dev, channel, metadata=None, control_in=None, control_out=None):
+    def capture(self, fifo, zep_target, dev, channel, metadata=None, control_in=None, control_out=None):
         """
         Main method responsible for starting all other threads. In case of standalone execution this method will block
         until SIGTERM/SIGINT and/or stop_sig_handler disables the loop via self.running event.
@@ -493,7 +493,7 @@ class Nrf802154Sniffer(object):
         packet_queue = Queue.Queue()
         self.channel = channel
         self.dev = dev
-        self.use_ztp = (ztp_target != None)
+        self.use_zep = (zep_target != None)
         self.running.set()
 
         if metadata == "ieee802154-tap":
@@ -511,8 +511,8 @@ class Nrf802154Sniffer(object):
 
         self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_reader"))
         self.threads.append(threading.Thread(target=self.serial_writer, name="serial_writer"))
-        if self.use_ztp:
-            self.threads.append(threading.Thread(target=self.ztp_writer, args=(ztp_target, packet_queue), name="fifo_writer"))
+        if self.use_zep:
+            self.threads.append(threading.Thread(target=self.zep_writer, args=(zep_target, packet_queue), name="fifo_writer"))
         else:
             self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_writer"))
 
@@ -536,7 +536,7 @@ class Nrf802154Sniffer(object):
         parser.add_argument("--extcap-reload-option", help="Reload elements for the given option")
         parser.add_argument("--capture", help="Start the capture routine", action="store_true" )
         parser.add_argument("--fifo", help="Use together with capture to provide the fifo to dump data to")
-        parser.add_argument("--ztp", help="Use together with capture to provide a UDP host where the ZTPv2 packets are send to")
+        parser.add_argument("--zep", help="Use together with capture to provide a UDP host where the ZEPv2 packets are send to")
         parser.add_argument("--extcap-capture-filter", help="Used together with capture to provide a capture filter")
         parser.add_argument("--extcap-control-in", help="Used to get control messages from toolbar")
         parser.add_argument("--extcap-control-out", help="Used to send control messages to toolbar")
@@ -578,11 +578,11 @@ if is_standalone:
             option = ''
         print(sniffer_comm.extcap_config(option))
 
-    if args.capture and (args.fifo or args.ztp):
+    if args.capture and (args.fifo or args.zep):
         channel = args.channel if args.channel else 11
         signal.signal(signal.SIGINT, sniffer_comm.stop_sig_handler)
         signal.signal(signal.SIGTERM, sniffer_comm.stop_sig_handler)
         try:
-            sniffer_comm.capture(args.fifo, args.ztp, args.extcap_interface, channel, args.metadata, args.extcap_control_in, args.extcap_control_out)
+            sniffer_comm.capture(args.fifo, args.zep, args.extcap_interface, channel, args.metadata, args.extcap_control_in, args.extcap_control_out)
         except KeyboardInterrupt as e:
             sniffer_comm.stop_sig_handler()
