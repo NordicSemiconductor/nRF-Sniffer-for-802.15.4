@@ -93,7 +93,7 @@ Ensure that Python directory is included in your `PATH` system environment varia
 1. Install the python interpreter. The recommended version is `3.7`. Make sure to check the `Add Python to environment variables` option during installation.
 2. Install the `pySerial` module using the Python's pip package manager:
     ```bash
-    sudo pip install pyserial
+    pip install pyserial
     ```
 
 ### Start sniffing
