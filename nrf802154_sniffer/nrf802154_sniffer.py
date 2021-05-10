@@ -464,6 +464,7 @@ class Nrf802154Sniffer(object):
         self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_writer"))
 
         for thread in self.threads:
+            thread.daemon = True
             thread.start()
 
         while is_standalone and self.running.is_set():
