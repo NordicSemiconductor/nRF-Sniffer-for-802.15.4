@@ -83,7 +83,7 @@ class Nrf802154Sniffer(object):
 
     TIMER_MAX = 2**32
 
-    def __init__(self):
+    def __init__(self, connection_open_timeout=None):
         self.serial = None
         self.serial_queue = Queue.Queue()
         self.running = threading.Event()
@@ -94,6 +94,7 @@ class Nrf802154Sniffer(object):
         self.channel = None
         self.dlt = None
         self.threads = []
+        self.connection_open_timeout = connection_open_timeout
 
         # Time correction variables.
         self.first_local_timestamp = None
@@ -356,11 +357,17 @@ class Nrf802154Sniffer(object):
         """
         time.sleep(2)
 
+        timeout = time.time() + self.connection_open_timeout if self.connection_open_timeout else None
         while self.running.is_set():
             try:
                 self.serial = Serial(dev, timeout=1, exclusive=True)
                 break
             except Exception as e:
+                if timeout and time.time() > timeout:
+                    self.running.clear()
+                    raise Exception(
+                        "Could not open serial connection to sniffer before timeout of {} seconds".format(
+                            self.connection_open_timeout))
                 self.logger.debug("Can't open serial device: {} reason: {}".format(dev, e))
                 time.sleep(0.5)
 
@@ -513,7 +520,7 @@ if is_standalone:
 
     if args.extcap_interfaces:
         print(sniffer_comm.extcap_interfaces())
-    
+
     if args.extcap_dlts:
         print(sniffer_comm.extcap_dlts())
 
