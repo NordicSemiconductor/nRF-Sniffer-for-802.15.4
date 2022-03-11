@@ -77,6 +77,10 @@ class Nrf802154Sniffer(object):
     CTRL_ARG_CHANNEL = 0
     CTRL_ARG_LOGGER = 6
 
+    # Channel Ranges
+    CHANNEL_MIN = 11
+    CHANNEL_MAX = 26
+
     # Pattern for packets being printed over serial.
     RCV_REGEX = 'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
 
@@ -91,6 +95,7 @@ class Nrf802154Sniffer(object):
         self.logger = logging.getLogger(__name__)
         self.dev = None
         self.channel = None
+        self.discard = threading.Event()
         self.dlt = None
         self.threads = []
         self.connection_open_timeout = connection_open_timeout
@@ -218,16 +223,21 @@ class Nrf802154Sniffer(object):
         values = []
         res =[]
 
-        args.append ( (0, '--channel', 'Channel', 'IEEE 802.15.4 channel', 'selector', '{required=true}{default=11}') )
+        args.append ( (0, '--channel', 'Channel', 'IEEE 802.15.4 channel', 'selector', 
+                          '{required=true}{default='+str(Nrf802154Sniffer.CHANNEL_MIN)+'}') )
         args.append ( (1, '--metadata', 'Out-Of-Band meta-data',
                           'Packet header containing out-of-band meta-data for channel, RSSI and LQI',
                           'selector', '{default=none}') )
+        args.append ( (2, '--channel-scan-interval', 'Channel scan interval',
+                          'Automatic channel scan interval in seconds, 0: disable scanning',
+                          'integer', '{default=0}') )
 
         if len(option) <= 0:
             for arg in args:
                 res.append("arg {number=%d}{call=%s}{display=%s}{tooltip=%s}{type=%s}%s" % arg)
 
-            values = values + [ (0, "%d" % i, "%d" % i, "true" if i == 11 else "false" ) for i in range(11,27) ]
+            values = values + [ (0, "%d" % i, "%d" % i, "true" if i == Nrf802154Sniffer.CHANNEL_MIN else "false" ) 
+                                for i in range(Nrf802154Sniffer.CHANNEL_MIN,Nrf802154Sniffer.CHANNEL_MAX+1) ]
 
             values.append ( (1, "none", "None", "true") )
             values.append ( (1, "ieee802154-tap", "IEEE 802.15.4 TAP", "false") )
@@ -399,14 +409,16 @@ class Nrf802154Sniffer(object):
                     buf += ch
                 else:
                     m = re.search(self.RCV_REGEX, str(buf))
+                    buf = b''
+                    if self.discard.is_set():
+                        continue
                     if m:
                         packet = a2b_hex(m.group(1)[:-4])
                         rssi = int(m.group(2))
                         lqi = int(m.group(3))
                         timestamp = int(m.group(4)) & 0xffffffff
-                        channel = int(channel)
+                        channel = int(self.channel)
                         queue.put(self.pcap_packet(packet, self.dlt, channel, rssi, lqi, self.correct_time(timestamp)))
-                    buf = b''
 
         except (serialutil.SerialException, serialutil.SerialTimeoutException) as e:
             self.logger.error("Cannot communicate with serial device: {} reason: {}".format(dev, e))
@@ -414,6 +426,16 @@ class Nrf802154Sniffer(object):
             self.setup_done.set()  # In case it wasn't set before.
             if self.running.is_set():  # Another precaution.
                 self.stop_sig_handler()
+    
+    def channel_scanner(self, channel_scan_interval):
+        while self.running.is_set():
+            time.sleep(channel_scan_interval)
+            self.discard.set()
+            self.channel = Nrf802154Sniffer.CHANNEL_MIN if self.channel == Nrf802154Sniffer.CHANNEL_MAX else self.channel + 1
+            self.serial_queue.put(b'channel ' + bytes(str(self.channel).encode()))
+            # Discard packets in the buffers so they don't get mislabelled with the wrong channels
+            time.sleep(0.5)
+            self.discard.clear()
 
     def fifo_writer(self, fifo, queue):
         """
@@ -435,7 +457,7 @@ class Nrf802154Sniffer(object):
                 except Queue.Empty:
                     pass
 
-    def extcap_capture(self, fifo, dev, channel, metadata=None, control_in=None, control_out=None):
+    def extcap_capture(self, fifo, dev, channel, metadata=None, control_in=None, control_out=None, channel_scan_interval=None):
         """
         Main method responsible for starting all other threads. In case of standalone execution this method will block
         until SIGTERM/SIGINT and/or stop_sig_handler disables the loop via self.running event.
@@ -445,7 +467,7 @@ class Nrf802154Sniffer(object):
             raise RuntimeError("Old threads were not joined properly")
 
         packet_queue = Queue.Queue()
-        self.channel = channel
+        self.channel = int(channel)
         self.dev = dev
         self.running.set()
 
@@ -461,6 +483,8 @@ class Nrf802154Sniffer(object):
         # TODO: Add toolbar with channel selector (channel per interface?)
         if control_in:
             self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
+        if channel_scan_interval:
+            self.threads.append(threading.Thread(target=self.channel_scanner, args=(channel_scan_interval,), name="channel_scanner"))
 
         self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_reader"))
         self.threads.append(threading.Thread(target=self.serial_writer, name="serial_writer"))
@@ -490,13 +514,17 @@ class Nrf802154Sniffer(object):
         parser.add_argument("--extcap-control-in", help="Used to get control messages from toolbar")
         parser.add_argument("--extcap-control-out", help="Used to send control messages to toolbar")
 
-        parser.add_argument("--channel", help="IEEE 802.15.4 capture channel [11-26]")
+        parser.add_argument("--channel", help="IEEE 802.15.4 capture channel [{}-{}]".format(Nrf802154Sniffer.CHANNEL_MIN, Nrf802154Sniffer.CHANNEL_MAX))
+        parser.add_argument("--channel-scan-interval", help="Automatic channel scan interval in seconds, 0: disable scanning", type=int)
         parser.add_argument("--metadata", help="Meta-Data type to use for captured packets")
 
         result, unknown = parser.parse_known_args()
 
         if result.capture and not result.extcap_interface:
             parser.error("--extcap-interface is required if --capture is present")
+        
+        if result.channel_scan_interval and result.channel_scan_interval < 0:
+            parser.error("--channel-scan-interval must be a positive integer")
 
         return result
 
@@ -528,10 +556,10 @@ if is_standalone:
         print(sniffer_comm.extcap_config(option))
 
     if args.capture and args.fifo:
-        channel = args.channel if args.channel else 11
+        channel = args.channel if args.channel else Nrf802154Sniffer.CHANNEL_MIN
         signal.signal(signal.SIGINT, sniffer_comm.stop_sig_handler)
         signal.signal(signal.SIGTERM, sniffer_comm.stop_sig_handler)
         try:
-            sniffer_comm.extcap_capture(args.fifo, args.extcap_interface, channel, args.metadata, args.extcap_control_in, args.extcap_control_out)
+            sniffer_comm.extcap_capture(args.fifo, args.extcap_interface, channel, args.metadata, args.extcap_control_in, args.extcap_control_out, args.channel_scan_interval)
         except KeyboardInterrupt as e:
             sniffer_comm.stop_sig_handler()
