@@ -58,7 +58,6 @@ import time
 import logging
 from argparse import ArgumentParser
 from binascii import a2b_hex
-from distutils.sysconfig import get_python_lib
 from serial import Serial, serialutil
 from serial.tools.list_ports import comports
 
@@ -179,14 +178,6 @@ class Nrf802154Sniffer(object):
             if self.serial.is_open is True:
                 self.serial.close()
             self.serial = None
-
-    @staticmethod
-    def get_hex_path():
-        """Helper method to get hex file path with nrf802154_sniffer firmware.
-        :return path to hex file with nrf802154_sniffer firmware
-        """
-
-        return os.path.join(get_python_lib(), 'nrf802154_sniffer', 'nrf802154_sniffer.hex')
 
     @staticmethod
     def extcap_interfaces():
