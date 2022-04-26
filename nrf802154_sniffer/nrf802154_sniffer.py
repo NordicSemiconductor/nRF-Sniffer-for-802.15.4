@@ -313,6 +313,9 @@ class Nrf802154Sniffer(object):
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
             self.stop_sig_handler()
 
+    def is_running(self):
+        return self.serial is not None and self.serial.is_open and self.setup_done.is_set()
+
     def serial_write(self):
         """
         Function responsible for sending commands to serial port.
@@ -379,7 +382,9 @@ class Nrf802154Sniffer(object):
             if not all(cmd.decode() in init_res.decode() for cmd in init_cmd):
                 msg = "{} did not reply properly to setup commands. Please re-plug the device and make sure firmware is correct. " \
                         "Recieved: {}\n".format(self, init_res)
-                self.logger.error(msg)
+                if self.serial.is_open is True:
+                    self.serial.close()
+                raise Exception(msg)
 
             self.serial_queue.put(b'receive')
             self.setup_done.set()
