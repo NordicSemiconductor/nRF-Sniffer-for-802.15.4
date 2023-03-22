@@ -71,7 +71,7 @@ class Nrf802154Sniffer(object):
 
     # USB device identification.
     NORDICSEMI_VID = 0x1915
-    SNIFFER_802154_PID = 0x154A
+    SNIFFER_802154_PID = 0x154B
 
     # Helpers for Wireshark argument parsing.
     CTRL_ARG_CHANNEL = 0
@@ -377,7 +377,7 @@ class Nrf802154Sniffer(object):
                 self.serial_queue.put(cmd)
 
             # Function serial_write appends twice '\r\n' to each command, so we have to calculate that for the echo.
-            init_res = self.serial.read(len(b"".join(c + b"\r\n\r\n" for c in init_cmd)))
+            init_res = self.serial.read(len(b"".join(c + b"\r\n\r\n\r\n\r\n" for c in init_cmd)))
 
             if not all(cmd.decode() in init_res.decode() for cmd in init_cmd):
                 msg = "{} did not reply properly to setup commands. Please re-plug the device and make sure firmware is correct. " \

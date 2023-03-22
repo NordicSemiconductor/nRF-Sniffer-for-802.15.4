@@ -51,6 +51,10 @@ setuptools.setup(
     include_package_data=True,
     packages=['nrf802154_sniffer'],
     package_data={
-        'nrf802154_sniffer': ['nrf802154_sniffer.hex']
+        'nrf802154_sniffer': [
+            'nrf802154_sniffer_nrf52840dk.hex',
+            'nrf802154_sniffer_nrf52840dongle.hex',
+            'nrf802154_sniffer_nrf5340dk.hex'
+        ]
     }
 )
