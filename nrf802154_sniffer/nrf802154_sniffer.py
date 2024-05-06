@@ -148,7 +148,7 @@ class Nrf802154Sniffer(object):
         """
         Function responsible for stopping the sniffer firmware and closing all threads.
         """
-        # Let's wait with closing afer we're sure that the sniffer started. Protects us
+        # Let's wait with closing after we're sure that the sniffer started. Protects us
         # from very short tests (NOTE: the serial_reader has a delayed start).
         while self.running.is_set() and not self.setup_done.is_set():
             time.sleep(1)
@@ -157,6 +157,11 @@ class Nrf802154Sniffer(object):
             self.serial_queue.put(b'')
             self.serial_queue.put(b'sleep')
             self.running.clear()
+
+            # Signal the control_reader thread to stop
+            if self.control_in:
+                with open(self.control_in, 'wb', 0) as fn:
+                    fn.write(b'\0')  # Write an empty string to signal termination
 
             alive_threads = []
 
@@ -308,10 +313,10 @@ class Nrf802154Sniffer(object):
         Related to not-yet-implemented wireshark toolbar features.
         """
         with open(fifo, 'rb', 0) as fn:
-            arg = 0
-            while arg != None:
+            while self.running.is_set():
                 arg, typ, payload = Nrf802154Sniffer.control_read(fn)
-            self.stop_sig_handler()
+                if arg is None:
+                    break
 
     def is_running(self):
         return self.serial is not None and self.serial.is_open and self.setup_done.is_set()
@@ -437,7 +442,7 @@ class Nrf802154Sniffer(object):
 
     def extcap_capture(self, fifo, dev, channel, metadata=None, control_in=None, control_out=None):
         """
-        Main method responsible for starting all other threads. In case of standalone execution this method will block
+        Main method responsible for starting all other threads. In case of standalone execution, this method will block
         until SIGTERM/SIGINT and/or stop_sig_handler disables the loop via self.running event.
         """
 
@@ -448,6 +453,7 @@ class Nrf802154Sniffer(object):
         self.channel = channel
         self.dev = dev
         self.running.set()
+        self.control_in = control_in
 
         if metadata == "ieee802154-tap":
             # For Wireshark 3.0 and later
@@ -460,9 +466,11 @@ class Nrf802154Sniffer(object):
 
         # TODO: Add toolbar with channel selector (channel per interface?)
         if control_in:
-            self.threads.append(threading.Thread(target=self.control_reader, args=(control_in,)))
+            control_reader_thread = threading.Thread(target=self.control_reader, args=(control_in,))
+            self.threads.append(control_reader_thread)
 
-        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue), name="serial_reader"))
+        self.threads.append(threading.Thread(target=self.serial_reader, args=(self.dev, self.channel, packet_queue),
+                                             name="serial_reader"))
         self.threads.append(threading.Thread(target=self.serial_writer, name="serial_writer"))
         self.threads.append(threading.Thread(target=self.fifo_writer, args=(fifo, packet_queue), name="fifo_writer"))
 
@@ -472,6 +480,9 @@ class Nrf802154Sniffer(object):
         while is_standalone and self.running.is_set():
             time.sleep(1)
 
+        # Wait for the control_reader thread to finish (if it exists)
+        if control_in:
+            control_reader_thread.join()
     @staticmethod
     def parse_args():
         """
