@@ -78,7 +78,7 @@ class Nrf802154Sniffer(object):
     CTRL_ARG_LOGGER = 6
 
     # Pattern for packets being printed over serial.
-    RCV_REGEX = 'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
+    RCV_REGEX = r'received:\s+([0-9a-fA-F]+)\s+power:\s+(-?\d+)\s+lqi:\s+(\d+)\s+time:\s+(-?\d+)'
 
     TIMER_MAX = 2**32
 
