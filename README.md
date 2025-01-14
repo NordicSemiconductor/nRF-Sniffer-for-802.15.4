@@ -3,12 +3,12 @@
 This repository contains firmware and Wireshark extcap plugin and Python script that can be used with the nRF52840 SoC for sniffing 802.15.4 packets.
 
 The software provided has been tested with the nRF52840 DK and the nRF52840 Dongle and with the following operating systems:
-* Ubuntu 18.04
+* Ubuntu 20.04
 * Windows 10
 * macOS Mojave
 
 ## Dependencies
-* Wireshark (Ubuntu package `wireshark`)
+* Wireshark 4.0 or later (Ubuntu package `wireshark`)
 * pySerial (Ubuntu package `python-serial` or `python3-serial`)
 
 ## Quick start guide
