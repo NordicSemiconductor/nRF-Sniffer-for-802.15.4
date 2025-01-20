@@ -224,7 +224,7 @@ class Nrf802154Sniffer:
         """
         res = []
         res.append(
-            "extcap {version=0.7.2}{help=https://github.com/NordicSemiconductor/nRF-Sniffer-for-802.15.4}{display=nRF Sniffer for 802.15.4}"
+            "extcap {version=0.8.0}{help=https://github.com/NordicSemiconductor/nRF-Sniffer-for-802.15.4}{display=nRF Sniffer for 802.15.4}"
         )
         for port in comports():
             if (
