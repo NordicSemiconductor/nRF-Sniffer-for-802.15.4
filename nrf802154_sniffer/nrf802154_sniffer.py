@@ -36,7 +36,6 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from enum import IntEnum
 import sys
 import os
 
@@ -56,9 +55,10 @@ from argparse import ArgumentParser
 from binascii import a2b_hex
 from serial import Serial, SerialException
 from serial.tools.list_ports import comports
-from multiprocessing import Queue, Process
+from multiprocessing import Queue, Process, freeze_support
 from dataclasses import dataclass
 from threading import Thread
+from enum import IntEnum
 
 
 @dataclass
@@ -513,6 +513,7 @@ class Nrf802154Sniffer:
 
 
 if is_standalone:
+    freeze_support()
     args = Nrf802154Sniffer.parse_args()
 
     logging.basicConfig(
