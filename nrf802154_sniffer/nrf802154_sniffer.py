@@ -39,6 +39,9 @@
 import sys
 import os
 
+if sys.version_info < (3, 7):
+    raise RuntimeError("This script requires Python 3.7 or higher.")
+
 is_standalone = __name__ == "__main__"
 
 
@@ -59,6 +62,7 @@ from multiprocessing import Queue, Process, freeze_support
 from dataclasses import dataclass
 from threading import Thread
 from enum import IntEnum
+from typing import List
 
 
 @dataclass
@@ -108,7 +112,7 @@ class Nrf802154Sniffer:
         self.control_out = None
         self.fifo = None
         self.dlt = DLT.DLT_IEEE802_15_4_TAP
-        self.processes: list[Process] = []
+        self.processes: List[Process] = []
         self.windows_mode = is_standalone and os.name == "nt"
         self.first_local_timestamp = None
         self.first_sniffer_timestamp = None
@@ -411,18 +415,20 @@ class Nrf802154Sniffer:
                 fifo.write(self.pcap_header())
                 fifo.flush()
 
-                while packet := self.queue.get():
-                    match packet:
-                        case SnifferPacket(content, timestamp, lqi, rssi):
-                            pcap = self.pcap_packet(
-                                content, self.dlt, self.channel, rssi, lqi, self.correct_time(timestamp)
-                            )
-                            fifo.write(pcap)
-                        case ExitEvent(reason):
-                            if reason:
-                                sys.stderr.write(reason)
-                            self._stop()
-                            break
+                while True:
+                    packet = self.queue.get()
+                    if packet is None:
+                        break
+                    if isinstance(packet, SnifferPacket):
+                        pcap = self.pcap_packet(
+                            content, self.dlt, self.channel, rssi, lqi, self.correct_time(timestamp)
+                        )
+                        fifo.write(pcap)
+                    elif isinstance(packet, ExitEvent):
+                        if packet.reason:
+                            sys.stderr.write(packet.reason)
+                        self._stop()
+                        break
         except BrokenPipeError:
             self._stop()
 
